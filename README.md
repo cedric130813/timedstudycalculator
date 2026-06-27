@@ -1,8 +1,9 @@
 # Activity-Based Time Study Calculator — Warehouse Picking
 
-A single-file, browser-based tool for conducting activity-based time studies on warehouse picking operations. No installation, no build step — just open `index.html` in any browser.
-
+### A single-file, browser-based tool for conducting activity-based time studies on warehouse picking operations. No installation, no build step — just open `index.html` in any browser.
 ---
+
+<img width="700" height="400" alt="Image" src="https://github.com/user-attachments/assets/8d287e92-3c10-4061-8d6f-dad14424b28b" />
 
 ## Features
 
