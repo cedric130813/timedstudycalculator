@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Activity-Based Time Study — Warehouse Picking</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+      min-height: 100vh;
+    }
+    .header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #1e3a8a 100%);
+      color: #fff;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+    .header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+    .header small { font-size: 11px; opacity: 0.7; display: block; margin-top: 2px; }
+    .tabs {
+      display: flex;
+      gap: 4px;
+      padding: 12px 24px 0;
+      background: #1e3a8a;
+    }
+    .tab {
+      padding: 9px 20px;
+      border-radius: 8px 8px 0 0;
+      background: rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.8);
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tab:hover { background: rgba(255,255,255,0.25); color: #fff; }
+    .tab.active { background: #f0f4f8; color: #1e3a8a; }
+    .content { padding: 24px; max-width: 1100px; margin: 0 auto; }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+      border: 1px solid #e2e8f0;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #64748b;
+      margin-bottom: 16px;
+    }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .grid4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; }
+    label { font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px; }
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      color: #1a202c;
+      background: #fff;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: #1e3a8a;
+      box-shadow: 0 0 0 3px rgba(30,58,138,0.1);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+    .btn-primary { background: #1e3a8a; color: #fff; }
+    .btn-primary:hover { background: #1e40af; }
+    .btn-success { background: #059669; color: #fff; }
+    .btn-success:hover { background: #047857; }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-danger:hover { background: #b91c1c; }
+    .btn-ghost { background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; }
+    .btn-ghost:hover { background: #e2e8f0; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .btn-xs { padding: 3px 8px; font-size: 11px; }
+    .timer-display {
+      font-size: 72px;
+      font-weight: 800;
+      letter-spacing: -2px;
+      color: #1e3a8a;
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+      padding: 24px 0 16px;
+      line-height: 1;
+    }
+    .timer-display.running { color: #059669; }
+    .timer-display.paused { color: #d97706; }
+    .activity-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .activity-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 14px 8px;
+      border-radius: 10px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.12s;
+      font-family: inherit;
+      gap: 4px;
+      text-align: center;
+      min-height: 80px;
+    }
+    .activity-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .activity-btn:active { transform: translateY(0); }
+    .activity-btn .code { font-size: 18px; font-weight: 800; }
+    .activity-btn .label { font-size: 10px; font-weight: 600; }
+    .activity-btn .cat { font-size: 9px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.3px; }
+    .category-va { background: #dcfce7; color: #14532d; border-color: #4ade80; }
+    .category-va:hover { background: #bbf7d0; }
+    .category-nva-n { background: #fef9c3; color: #713f12; border-color: #facc15; }
+    .category-nva-n:hover { background: #fef08a; }
+    .category-nva { background: #fee2e2; color: #7f1d1d; border-color: #f87171; }
+    .category-nva:hover { background: #fecaca; }
+    .obs-log {
+      max-height: 280px;
+      overflow-y: auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    .obs-log table { width: 100%; border-collapse: collapse; }
+    .obs-log th {
+      background: #f8fafc;
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #64748b;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      position: sticky;
+      top: 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .obs-log td { padding: 7px 12px; border-bottom: 1px solid #f1f5f9; }
+    .obs-log tr:last-child td { border-bottom: none; }
+    .obs-log tr:hover td { background: #f8fafc; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .badge-va { background: #dcfce7; color: #14532d; }
+    .badge-nva-n { background: #fef9c3; color: #713f12; }
+    .badge-nva { background: #fee2e2; color: #7f1d1d; }
+    .metric-card {
+      background: #f8fafc;
+      border-radius: 10px;
+      padding: 16px;
+      border: 1px solid #e2e8f0;
+      text-align: center;
+    }
+    .metric-card .value { font-size: 28px; font-weight: 800; color: #1e3a8a; line-height: 1; }
+    .metric-card .label { font-size: 11px; color: #64748b; margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+    .metric-card .sub { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+    .bar-chart { margin-top: 8px; }
+    .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12px; }
+    .bar-row .bar-label { width: 160px; flex-shrink: 0; color: #475569; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar-track { flex: 1; background: #f1f5f9; border-radius: 99px; height: 20px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease; display: flex; align-items: center; padding-left: 8px; font-size: 10px; font-weight: 700; color: #fff; }
+    .bar-row .bar-val { width: 70px; flex-shrink: 0; text-align: right; color: #334155; font-weight: 600; }
+    .divider { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #e0e7ff;
+      color: #3730a3;
+    }
+    .round-selector {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .round-btn {
+      padding: 5px 14px;
+      border-radius: 6px;
+      border: 1.5px solid #cbd5e1;
+      background: #fff;
+      color: #334155;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .round-btn.active { background: #1e3a8a; border-color: #1e3a8a; color: #fff; }
+    .round-btn:hover:not(.active) { border-color: #1e3a8a; color: #1e3a8a; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #94a3b8; }
+    .empty-state svg { margin: 0 auto 12px; display: block; }
+    .tag-va { color: #059669; font-weight: 700; }
+    .tag-nva { color: #dc2626; font-weight: 700; }
+    .tag-nvan { color: #d97706; font-weight: 700; }
+    .results-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .results-table th {
+      background: #f8fafc;
+      padding: 9px 12px;
+      text-align: left;
+      font-weight: 700;
+      color: #475569;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    .results-table td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; }
+    .results-table tr:last-child td { border-bottom: none; }
+    .results-table tr:hover td { background: #f8fafc; }
+    .rating-input { width: 70px; text-align: center; }
+    .alert { padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 500; margin-bottom: 12px; }
+    .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+    .alert-warn { background: #fffbeb; color: #92400e; border: 1px solid #fcd34d; }
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .items-center { align-items: center; }
+    .justify-between { justify-content: space-between; }
+    .gap-2 { gap: 8px; }
+    .gap-3 { gap: 12px; }
+    .mt-1 { margin-top: 4px; }
+    .mt-2 { margin-top: 8px; }
+    .mt-3 { margin-top: 12px; }
+    .mt-4 { margin-top: 16px; }
+    .mb-2 { margin-bottom: 8px; }
+    .text-sm { font-size: 12px; }
+    .text-xs { font-size: 11px; }
+    .text-muted { color: #94a3b8; }
+    .font-bold { font-weight: 700; }
+    .text-center { text-align: center; }
+    @media (max-width: 700px) {
+      .grid2, .grid3, .grid4 { grid-template-columns: 1fr; }
+      .content { padding: 12px; }
+      .timer-display { font-size: 52px; }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useCallback, useRef, useEffect } = React;
+
+// ── Defaults ─────────────────────────────────────────────────────────────────
+const DEFAULT_ACTIVITIES = [
+  { id:'TT', label:'Travel (Empty)',   category:'nva-n', color:'#f59e0b' },
+  { id:'TL', label:'Travel (Loaded)',  category:'nva-n', color:'#d97706' },
+  { id:'LC', label:'Locate / Search',  category:'nva',   color:'#ef4444' },
+  { id:'PK', label:'Pick Item',        category:'va',    color:'#10b981' },
+  { id:'SC', label:'Scan / Verify',    category:'va',    color:'#059669' },
+  { id:'HA', label:'Handle / Stage',   category:'va',    color:'#34d399' },
+  { id:'WT', label:'Wait / Idle',      category:'nva',   color:'#f87171' },
+  { id:'AD', label:'Admin / Label',    category:'nva-n', color:'#fb923c' },
+  { id:'RE', label:'Return to Start',  category:'nva-n', color:'#fbbf24' },
+  { id:'OT', label:'Other',            category:'nva',   color:'#a78bfa' },
+];
+
+const CAT_LABEL = { va: 'Value-Added', 'nva-n': 'NVA Necessary', nva: 'Non-Value-Added' };
+const CAT_CLASS = { va: 'category-va', 'nva-n': 'category-nva-n', nva: 'category-nva' };
+const BADGE_CLASS = { va: 'badge-va', 'nva-n': 'badge-nva-n', nva: 'badge-nva' };
+const BAR_COLOR = { va: '#10b981', 'nva-n': '#f59e0b', nva: '#ef4444' };
+
+const uid = () => Math.random().toString(36).slice(2, 9);
+const fmt2 = n => String(Math.floor(n)).padStart(2,'0');
+const fmtTime = ms => {
+  const s = Math.floor(ms / 1000);
+  return `${fmt2(Math.floor(s/60))}:${fmt2(s%60)}.${String(Math.floor((ms%1000)/100))}`;
+};
+const fmtSec = s => isNaN(s) ? '-' : s.toFixed(2) + 's';
+const mean = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+const stddev = arr => {
+  if (arr.length < 2) return 0;
+  const m = mean(arr);
+  return Math.sqrt(arr.reduce((a,b)=>a+(b-m)**2,0)/(arr.length-1));
+};
+
+// ── Setup Tab ────────────────────────────────────────────────────────────────
+function SetupTab({ setup, setSetup, activities, setActivities }) {
+  const [newAct, setNewAct] = useState({ id:'', label:'', category:'va' });
+
+  const addActivity = () => {
+    if (!newAct.id.trim() || !newAct.label.trim()) return;
+    const colors = ['#6366f1','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+    setActivities(a => [...a, { ...newAct, id: newAct.id.toUpperCase(), color: colors[a.length % colors.length] }]);
+    setNewAct({ id:'', label:'', category:'va' });
+  };
+
+  const removeActivity = id => setActivities(a => a.filter(x => x.id !== id));
+
+  return (
+    <div>
+      <div className="card">
+        <div className="card-title">Study Information</div>
+        <div className="grid3" style={{gap:12}}>
+          {[
+            ['studyName','Study Name / Job #'],
+            ['analyst','Analyst Name'],
+            ['date','Date'],
+            ['picker','Picker Name / ID'],
+            ['shift','Shift'],
+            ['pickMethod','Picking Method'],
+          ].map(([key, lbl]) => (
+            <div key={key}>
+              <label>{lbl}</label>
+              {key === 'pickMethod' ? (
+                <select value={setup[key]||''} onChange={e=>setSetup(s=>({...s,[key]:e.target.value}))}>
+                  {['RF Scanner','Voice Directed','Pick-to-Light','Paper / Manual','RFID'].map(o=><option key={o}>{o}</option>)}
+                </select>
+              ) : key === 'shift' ? (
+                <select value={setup[key]||''} onChange={e=>setSetup(s=>({...s,[key]:e.target.value}))}>
+                  {['Day','Afternoon','Night','Rotating'].map(o=><option key={o}>{o}</option>)}
+                </select>
+              ) : (
+                <input
+                  type={key==='date'?'date':'text'}
+                  value={setup[key]||''}
+                  onChange={e=>setSetup(s=>({...s,[key]:e.target.value}))}
+                  placeholder={lbl}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        <hr className="divider" />
+        <div className="grid4" style={{gap:12}}>
+          <div>
+            <label>Pick Type</label>
+            <select value={setup.pickType||''} onChange={e=>setSetup(s=>({...s,pickType:e.target.value}))}>
+              {['Single Order','Batch / Multi-Order','Zone','Cluster','Put-to-Light'].map(o=><option key={o}>{o}</option>)}
+            </select>
+          </div>
+          <div>
+            <label>Equipment / MHE</label>
+            <select value={setup.equipment||''} onChange={e=>setSetup(s=>({...s,equipment:e.target.value}))}>
+              {['Walk (no MHE)','Cart / Trolley','Pallet Jack','Reach Truck','Order Picker','Conveyor'].map(o=><option key={o}>{o}</option>)}
+            </select>
+          </div>
+          <div>
+            <label>Target Observations</label>
+            <input type="number" min="1" max="200" value={setup.targetObs||30}
+              onChange={e=>setSetup(s=>({...s,targetObs:+e.target.value}))} />
+          </div>
+          <div>
+            <label>PF&amp;D Allowance %</label>
+            <input type="number" min="0" max="50" step="0.5" value={setup.allowance||15}
+              onChange={e=>setSetup(s=>({...s,allowance:+e.target.value}))} />
+          </div>
+        </div>
+        <div className="mt-3">
+          <label>Notes / Conditions</label>
+          <textarea rows="2" value={setup.notes||''} onChange={e=>setSetup(s=>({...s,notes:e.target.value}))}
+            placeholder="Describe pick area layout, SKU density, order profile, any special conditions..." />
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="flex items-center justify-between mb-2">
+          <div className="card-title" style={{marginBottom:0}}>Activity Codes</div>
+          <span className="text-xs text-muted">Click an activity in the Record tab to time it</span>
+        </div>
+        <table className="results-table">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Description</th>
+              <th>Category</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {activities.map(a => (
+              <tr key={a.id}>
+                <td><span style={{fontWeight:800,color:a.color,fontSize:14}}>{a.id}</span></td>
+                <td>{a.label}</td>
+                <td>
+                  <span className={`badge ${BADGE_CLASS[a.category]}`}>{CAT_LABEL[a.category]}</span>
+                </td>
+                <td>
+                  <button className="btn btn-ghost btn-xs" onClick={()=>removeActivity(a.id)}>Remove</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <hr className="divider" />
+        <div className="flex gap-2 items-center flex-wrap">
+          <div style={{width:80}}>
+            <label>Code</label>
+            <input value={newAct.id} onChange={e=>setNewAct(a=>({...a,id:e.target.value.toUpperCase().slice(0,4)}))} placeholder="XX" />
+          </div>
+          <div style={{flex:1,minWidth:140}}>
+            <label>Description</label>
+            <input value={newAct.label} onChange={e=>setNewAct(a=>({...a,label:e.target.value}))} placeholder="Activity name" />
+          </div>
+          <div style={{width:160}}>
+            <label>Category</label>
+            <select value={newAct.category} onChange={e=>setNewAct(a=>({...a,category:e.target.value}))}>
+              <option value="va">Value-Added</option>
+              <option value="nva-n">NVA Necessary</option>
+              <option value="nva">Non-Value-Added</option>
+            </select>
+          </div>
+          <div style={{paddingTop:18}}>
+            <button className="btn btn-primary btn-sm" onClick={addActivity}>+ Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Record Tab ────────────────────────────────────────────────────────────────
+function RecordTab({ setup, activities, rounds, setRounds, activeRound, setActiveRound }) {
+  const [elapsed, setElapsed] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [snapMode, setSnapMode] = useState(true); // snapback vs continuous
+  const [lastSnap, setLastSnap] = useState(0);
+  const [note, setNote] = useState('');
+  const [rating, setRating] = useState(100);
+  const intervalRef = useRef(null);
+  const startRef = useRef(null);
+
+  useEffect(() => {
+    if (running) {
+      startRef.current = Date.now() - elapsed;
+      intervalRef.current = setInterval(() => {
+        setElapsed(Date.now() - startRef.current);
+      }, 50);
+    } else {
+      clearInterval(intervalRef.current);
+    }
+    return () => clearInterval(intervalRef.current);
+  }, [running]);
+
+  const currentRound = rounds[activeRound] || { observations: [] };
+
+  const startStop = () => {
+    if (!running) {
+      setRunning(true);
+    } else {
+      setRunning(false);
+    }
+  };
+
+  const reset = () => {
+    setRunning(false);
+    setElapsed(0);
+    setLastSnap(0);
+  };
+
+  const recordActivity = useCallback((act) => {
+    if (!running) return;
+    const duration = snapMode ? (elapsed - lastSnap) / 1000 : elapsed / 1000;
+    const obs = {
+      id: uid(),
+      actId: act.id,
+      actLabel: act.label,
+      category: act.category,
+      durationSec: +duration.toFixed(3),
+      elapsedMs: elapsed,
+      note,
+      rating,
+      timestamp: new Date().toISOString(),
+    };
+    if (snapMode) setLastSnap(elapsed);
+    setRounds(rs => {
+      const copy = rs.map((r, i) =>
+        i === activeRound ? { ...r, observations: [...r.observations, obs] } : r
+      );
+      return copy;
+    });
+    setNote('');
+  }, [running, elapsed, lastSnap, snapMode, note, rating, activeRound, setRounds]);
+
+  const undoLast = () => {
+    setRounds(rs => {
+      const copy = [...rs];
+      const obs = [...(copy[activeRound]?.observations || [])];
+      obs.pop();
+      copy[activeRound] = { ...copy[activeRound], observations: obs };
+      return copy;
+    });
+  };
+
+  const addRound = () => {
+    setRounds(rs => [...rs, { id: uid(), label: `Round ${rs.length + 1}`, observations: [] }]);
+    setActiveRound(rounds.length);
+    reset();
+  };
+
+  const totalObs = rounds.reduce((a,r) => a + r.observations.length, 0);
+  const target = setup.targetObs || 30;
+  const progress = Math.min(100, Math.round(totalObs / target * 100));
+
+  const timerClass = !running ? '' : snapMode ? 'running' : 'running';
+
+  return (
+    <div>
+      {/* Progress bar */}
+      <div className="card" style={{padding:'14px 20px'}}>
+        <div className="flex items-center justify-between" style={{gap:16}}>
+          <div style={{flex:1}}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-muted font-bold">OBSERVATIONS</span>
+              <span className="text-xs font-bold" style={{color:progress>=100?'#059669':'#1e3a8a'}}>{totalObs} / {target}</span>
+            </div>
+            <div style={{height:8,background:'#e2e8f0',borderRadius:99,overflow:'hidden'}}>
+              <div style={{width:`${progress}%`,height:'100%',background:progress>=100?'#059669':'#1e3a8a',borderRadius:99,transition:'width 0.3s'}} />
+            </div>
+          </div>
+          <div className="round-selector">
+            {rounds.map((r,i) => (
+              <button key={r.id} className={`round-btn ${i===activeRound?'active':''}`} onClick={()=>{setActiveRound(i);reset();}}>
+                {r.label} <span style={{opacity:0.7,marginLeft:2}}>({r.observations.length})</span>
+              </button>
+            ))}
+            <button className="btn btn-ghost btn-sm" onClick={addRound}>+ Round</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Timer */}
+      <div className="card">
+        <div className={`timer-display ${timerClass}`}>{fmtTime(elapsed)}</div>
+        <div className="flex gap-2 justify-between items-center" style={{flexWrap:'wrap'}}>
+          <div className="flex gap-2">
+            <button className={`btn ${running?'btn-danger':'btn-success'}`} style={{minWidth:120}} onClick={startStop}>
+              {running ? '⏸ Pause' : elapsed > 0 ? '▶ Resume' : '▶ Start'}
+            </button>
+            <button className="btn btn-ghost" onClick={reset}>↺ Reset</button>
+          </div>
+          <div className="flex gap-3 items-center">
+            <label style={{marginBottom:0,display:'flex',alignItems:'center',gap:8,cursor:'pointer'}}>
+              <input type="checkbox" checked={snapMode} onChange={e=>setSnapMode(e.target.checked)} style={{width:16,height:16}} />
+              <span className="text-sm font-bold">Snapback timing</span>
+            </label>
+            <div style={{display:'flex',alignItems:'center',gap:6}}>
+              <span className="text-sm font-bold">Rating %:</span>
+              <input type="number" min="50" max="150" step="5" value={rating} onChange={e=>setRating(+e.target.value)}
+                style={{width:65}} className="rating-input" />
+            </div>
+          </div>
+        </div>
+        <div className="alert alert-info mt-3">
+          {snapMode
+            ? '⏱ Snapback mode: timer resets after each activity click. Duration = time since last click.'
+            : '⏱ Continuous mode: duration = elapsed time at click. Timer keeps running.'}
+        </div>
+        <div className="mt-2 flex gap-2 items-center">
+          <input value={note} onChange={e=>setNote(e.target.value)} placeholder="Optional note for next observation..." style={{flex:1}} />
+        </div>
+      </div>
+
+      {/* Activity buttons */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-2">
+          <div className="card-title" style={{marginBottom:0}}>Click to Record Activity</div>
+          {!running && <span className="text-xs text-muted">Start timer first</span>}
+        </div>
+        <div className="activity-grid">
+          {activities.map(act => (
+            <button
+              key={act.id}
+              className={`activity-btn ${CAT_CLASS[act.category]} ${!running?'':''}` }
+              style={running ? {} : {opacity:0.5,cursor:'not-allowed'}}
+              onClick={() => recordActivity(act)}
+              disabled={!running}
+            >
+              <span className="code">{act.id}</span>
+              <span className="label">{act.label}</span>
+              <span className="cat">{CAT_LABEL[act.category]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Observation log */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-2">
+          <div className="card-title" style={{marginBottom:0}}>
+            Observation Log — {currentRound.label} ({currentRound.observations.length} entries)
+          </div>
+          <div className="flex gap-2">
+            {currentRound.observations.length > 0 && (
+              <button className="btn btn-ghost btn-sm" onClick={undoLast}>↩ Undo Last</button>
+            )}
+          </div>
+        </div>
+        {currentRound.observations.length === 0 ? (
+          <div className="empty-state">
+            <svg width="40" height="40" fill="none" stroke="#cbd5e1" strokeWidth="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <div>No observations yet — start the timer and click activities above.</div>
+          </div>
+        ) : (
+          <div className="obs-log">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Code</th>
+                  <th>Activity</th>
+                  <th>Category</th>
+                  <th>Duration (s)</th>
+                  <th>Rating %</th>
+                  <th>Normal (s)</th>
+                  <th>Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...currentRound.observations].reverse().map((obs, idx) => {
+                  const normalTime = obs.durationSec * (obs.rating / 100);
+                  return (
+                    <tr key={obs.id}>
+                      <td className="text-muted">{currentRound.observations.length - idx}</td>
+                      <td><span style={{fontWeight:800,color: activities.find(a=>a.id===obs.actId)?.color||'#333'}}>{obs.actId}</span></td>
+                      <td>{obs.actLabel}</td>
+                      <td><span className={`badge ${BADGE_CLASS[obs.category]}`}>{obs.category.toUpperCase()}</span></td>
+                      <td className="font-bold">{obs.durationSec.toFixed(2)}</td>
+                      <td>{obs.rating}</td>
+                      <td>{normalTime.toFixed(2)}</td>
+                      <td className="text-muted text-xs">{obs.note}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Results Tab ───────────────────────────────────────────────────────────────
+function ResultsTab({ setup, activities, rounds }) {
+  const allowance = (setup.allowance || 15) / 100;
+  const allObs = rounds.flatMap(r => r.observations);
+
+  if (allObs.length === 0) {
+    return (
+      <div className="card">
+        <div className="empty-state">
+          <svg width="40" height="40" fill="none" stroke="#cbd5e1" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+          <div>No observations recorded yet. Go to the Record tab to collect data.</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Group by activity
+  const byAct = {};
+  activities.forEach(a => { byAct[a.id] = { ...a, durations: [], normalTimes: [] }; });
+  allObs.forEach(obs => {
+    if (!byAct[obs.actId]) byAct[obs.actId] = { id: obs.actId, label: obs.actLabel, category: obs.category, color: '#888', durations: [], normalTimes: [] };
+    byAct[obs.actId].durations.push(obs.durationSec);
+    byAct[obs.actId].normalTimes.push(obs.durationSec * obs.rating / 100);
+  });
+
+  const actStats = Object.values(byAct).filter(a => a.durations.length > 0).map(a => {
+    const avgNormal = mean(a.normalTimes);
+    const stdNormal = stddev(a.normalTimes);
+    const stdTime = avgNormal * (1 + allowance);
+    const totalTime = a.durations.reduce((s,d)=>s+d,0);
+    return { ...a, count: a.durations.length, avgDuration: mean(a.durations), stdDuration: stddev(a.durations), avgNormal, stdNormal, stdTime, totalTime };
+  }).sort((a,b) => b.totalTime - a.totalTime);
+
+  const totalSec = actStats.reduce((s,a) => s+a.totalTime, 0);
+  const maxSec = Math.max(...actStats.map(a=>a.totalTime), 1);
+
+  // By category
+  const byCat = { va: 0, 'nva-n': 0, nva: 0 };
+  actStats.forEach(a => { byCat[a.category] = (byCat[a.category]||0) + a.totalTime; });
+  const vaPct = totalSec ? ((byCat.va / totalSec) * 100).toFixed(1) : 0;
+  const nvaNPct = totalSec ? ((byCat['nva-n'] / totalSec) * 100).toFixed(1) : 0;
+  const nvaPct = totalSec ? ((byCat.nva / totalSec) * 100).toFixed(1) : 0;
+
+  // Productivity estimate
+  const cycleStdTime = actStats.reduce((s,a) => s+a.stdTime, 0);
+  const picksPerHour = cycleStdTime > 0 ? (3600 / cycleStdTime).toFixed(1) : '-';
+
+  // Per-round summary
+  const roundStats = rounds.map(r => {
+    const total = r.observations.reduce((s,o)=>s+o.durationSec, 0);
+    const picks = r.observations.filter(o => o.actId === 'PK' || activities.find(a=>a.id===o.actId)?.category==='va').length;
+    return { ...r, totalSec: total, totalObs: r.observations.length, vaPicks: picks };
+  });
+
+  const exportExcel = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Study Info sheet
+    const info = [
+      ['Field','Value'],
+      ['Study Name', setup.studyName||''],
+      ['Analyst', setup.analyst||''],
+      ['Date', setup.date||''],
+      ['Picker', setup.picker||''],
+      ['Shift', setup.shift||''],
+      ['Pick Method', setup.pickMethod||''],
+      ['Pick Type', setup.pickType||''],
+      ['Equipment', setup.equipment||''],
+      ['PF&D Allowance %', setup.allowance||15],
+      ['Notes', setup.notes||''],
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(info), 'Study Info');
+
+    // All Observations
+    const obsRows = [['Round','#','Code','Activity','Category','Duration (s)','Rating %','Normal Time (s)','Note','Timestamp']];
+    rounds.forEach(r => {
+      r.observations.forEach((o,i) => {
+        obsRows.push([r.label, i+1, o.actId, o.actLabel, o.category, o.durationSec, o.rating, +(o.durationSec*o.rating/100).toFixed(3), o.note||'', o.timestamp]);
+      });
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(obsRows), 'Observations');
+
+    // Activity Summary
+    const sumRows = [['Code','Activity','Category','Count','Avg Duration (s)','Std Dev (s)','Avg Normal (s)','Std Dev Normal (s)','Std Time (s)','Total Time (s)','% of Total']];
+    actStats.forEach(a => {
+      sumRows.push([a.id, a.label, CAT_LABEL[a.category], a.count, +a.avgDuration.toFixed(3), +a.stdDuration.toFixed(3), +a.avgNormal.toFixed(3), +a.stdNormal.toFixed(3), +a.stdTime.toFixed(3), +a.totalTime.toFixed(3), totalSec ? +((a.totalTime/totalSec*100).toFixed(1)) : 0]);
+    });
+    sumRows.push([]);
+    sumRows.push(['','Total','',allObs.length,'','','','','',+totalSec.toFixed(3),100]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sumRows), 'Activity Summary');
+
+    // Productivity
+    const prodRows = [
+      ['Metric','Value'],
+      ['Total Observations', allObs.length],
+      ['Total Observed Time (s)', +totalSec.toFixed(2)],
+      ['Value-Added %', vaPct],
+      ['NVA-Necessary %', nvaNPct],
+      ['Non-Value-Added %', nvaPct],
+      ['Cycle Standard Time (s)', +cycleStdTime.toFixed(2)],
+      ['Estimated Picks/Hour', picksPerHour],
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(prodRows), 'Productivity');
+
+    XLSX.writeFile(wb, `time-study-${(setup.studyName||'picking').replace(/\s+/g,'-')}-${setup.date||'export'}.xlsx`);
+  };
+
+  return (
+    <div>
+      {/* Summary metrics */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <div className="card-title" style={{marginBottom:0}}>Study Summary</div>
+          <button className="btn btn-success btn-sm" onClick={exportExcel}>↓ Export Excel</button>
+        </div>
+        <div className="grid4">
+          <div className="metric-card">
+            <div className="value">{allObs.length}</div>
+            <div className="label">Total Obs.</div>
+            <div className="sub">Target: {setup.targetObs||30}</div>
+          </div>
+          <div className="metric-card">
+            <div className="value" style={{color:'#059669'}}>{vaPct}%</div>
+            <div className="label">Value-Added</div>
+            <div className="sub">of observed time</div>
+          </div>
+          <div className="metric-card">
+            <div className="value" style={{color:'#ef4444'}}>{nvaPct}%</div>
+            <div className="label">Non-Value-Added</div>
+            <div className="sub">elimination target</div>
+          </div>
+          <div className="metric-card">
+            <div className="value" style={{color:'#1e3a8a'}}>{picksPerHour}</div>
+            <div className="label">Est. Picks / Hr</div>
+            <div className="sub">at std time + {setup.allowance||15}% PF&D</div>
+          </div>
+        </div>
+        <div className="grid3 mt-3">
+          <div className="metric-card">
+            <div className="value" style={{fontSize:22}}>{totalSec.toFixed(1)}s</div>
+            <div className="label">Total Observed Time</div>
+          </div>
+          <div className="metric-card">
+            <div className="value" style={{fontSize:22}}>{cycleStdTime.toFixed(1)}s</div>
+            <div className="label">Cycle Standard Time</div>
+            <div className="sub">incl. {setup.allowance||15}% PF&D</div>
+          </div>
+          <div className="metric-card">
+            <div className="value" style={{fontSize:22,color:'#d97706'}}>{nvaNPct}%</div>
+            <div className="label">NVA-Necessary</div>
+            <div className="sub">(travel, admin, etc.)</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Time breakdown bar chart */}
+      <div className="card">
+        <div className="card-title">Time Breakdown by Activity</div>
+        <div className="bar-chart">
+          {actStats.map(a => (
+            <div key={a.id} className="bar-row">
+              <div className="bar-label" title={a.label}>{a.id} — {a.label}</div>
+              <div className="bar-track">
+                <div className="bar-fill"
+                  style={{width:`${(a.totalTime/maxSec)*100}%`, background: BAR_COLOR[a.category]||a.color}}>
+                  {(a.totalTime/totalSec*100).toFixed(0)}%
+                </div>
+              </div>
+              <div className="bar-val">{a.totalTime.toFixed(1)}s</div>
+            </div>
+          ))}
+        </div>
+        <hr className="divider" />
+        <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
+          {Object.entries({va:'#10b981','nva-n':'#f59e0b',nva:'#ef4444'}).map(([k,c])=>(
+            <div key={k} style={{display:'flex',alignItems:'center',gap:6,fontSize:12}}>
+              <span style={{width:12,height:12,borderRadius:3,background:c,display:'inline-block'}}/>
+              <span>{CAT_LABEL[k]}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Detailed stats table */}
+      <div className="card">
+        <div className="card-title">Activity Statistics</div>
+        <div style={{overflowX:'auto'}}>
+          <table className="results-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Activity</th>
+                <th>Category</th>
+                <th>Count</th>
+                <th>Avg (s)</th>
+                <th>Std Dev</th>
+                <th>Normal Time (s)</th>
+                <th>Std Time (s)</th>
+                <th>% Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {actStats.map(a => (
+                <tr key={a.id}>
+                  <td><span style={{fontWeight:800,color:a.color}}>{a.id}</span></td>
+                  <td className="font-bold">{a.label}</td>
+                  <td><span className={`badge ${BADGE_CLASS[a.category]}`}>{CAT_LABEL[a.category]}</span></td>
+                  <td>{a.count}</td>
+                  <td>{a.avgDuration.toFixed(2)}</td>
+                  <td className="text-muted">{a.stdDuration.toFixed(2)}</td>
+                  <td>{a.avgNormal.toFixed(2)}</td>
+                  <td className="font-bold">{a.stdTime.toFixed(2)}</td>
+                  <td>{totalSec ? (a.totalTime/totalSec*100).toFixed(1) : 0}%</td>
+                </tr>
+              ))}
+              <tr style={{background:'#f8fafc',fontWeight:700}}>
+                <td colSpan="3">TOTAL</td>
+                <td>{allObs.length}</td>
+                <td>{(totalSec/allObs.length).toFixed(2)}</td>
+                <td>—</td>
+                <td>—</td>
+                <td>{cycleStdTime.toFixed(2)}</td>
+                <td>100%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="alert alert-info mt-3">
+          Normal Time = Observed Time × Rating Factor &nbsp;|&nbsp; Standard Time = Normal Time × (1 + {setup.allowance||15}% PF&amp;D allowance)
+        </div>
+      </div>
+
+      {/* Per-round summary */}
+      {rounds.length > 1 && (
+        <div className="card">
+          <div className="card-title">Round Comparison</div>
+          <table className="results-table">
+            <thead>
+              <tr><th>Round</th><th>Observations</th><th>Total Time (s)</th><th>Avg per Obs (s)</th></tr>
+            </thead>
+            <tbody>
+              {roundStats.map(r => (
+                <tr key={r.id}>
+                  <td className="font-bold">{r.label}</td>
+                  <td>{r.totalObs}</td>
+                  <td>{r.totalSec.toFixed(1)}</td>
+                  <td>{r.totalObs ? (r.totalSec/r.totalObs).toFixed(2) : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+function App() {
+  const [tab, setTab] = useState('setup');
+  const [setup, setSetup] = useState({
+    studyName: '', analyst: '', date: new Date().toISOString().slice(0,10),
+    picker: '', shift: 'Day', pickMethod: 'RF Scanner',
+    pickType: 'Single Order', equipment: 'Cart / Trolley',
+    targetObs: 30, allowance: 15, notes: '',
+  });
+  const [activities, setActivities] = useState(DEFAULT_ACTIVITIES);
+  const [rounds, setRounds] = useState([{ id: uid(), label: 'Round 1', observations: [] }]);
+  const [activeRound, setActiveRound] = useState(0);
+
+  return (
+    <div>
+      <div className="header">
+        <div>
+          <h1>Activity-Based Time Study</h1>
+          <small>Warehouse Picking Operations</small>
+        </div>
+        <div className="flex gap-2 items-center">
+          {setup.studyName && <span className="pill">{setup.studyName}</span>}
+          {setup.picker && <span className="pill">{setup.picker}</span>}
+        </div>
+      </div>
+
+      <div className="tabs">
+        {[['setup','⚙ Setup'],['record','⏱ Record'],['results','📊 Results']].map(([key,label]) => (
+          <button key={key} className={`tab ${tab===key?'active':''}`} onClick={()=>setTab(key)}>{label}</button>
+        ))}
+      </div>
+
+      <div className="content">
+        {tab === 'setup' && (
+          <SetupTab setup={setup} setSetup={setSetup} activities={activities} setActivities={setActivities} />
+        )}
+        {tab === 'record' && (
+          <RecordTab setup={setup} activities={activities} rounds={rounds} setRounds={setRounds}
+            activeRound={activeRound} setActiveRound={setActiveRound} />
+        )}
+        {tab === 'results' && (
+          <ResultsTab setup={setup} activities={activities} rounds={rounds} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
